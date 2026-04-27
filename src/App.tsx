@@ -25,16 +25,13 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
 
-  // Auth State
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authError, setAuthError] = useState('');
-
   // Dashboard State
   const [history, setHistory] = useState<SearchHistory[]>([]);
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Mock anonymous user for now
+  const mockUserId = '00000000-0000-0000-0000-000000000000';
 
   // Search State
   const [query, setQuery] = useState('');
@@ -52,15 +49,7 @@ export default function App() {
         if (config.supabaseUrl && config.supabaseAnonKey) {
           const client = createClient(config.supabaseUrl, config.supabaseAnonKey);
           setSupabase(client);
-          
-          client.auth.getSession().then(({ data }) => {
-            setSession(data.session);
-            setLoadingConfig(false);
-          });
-
-          client.auth.onAuthStateChange((_event, newSession) => {
-            setSession(newSession);
-          });
+          setLoadingConfig(false);
         } else {
           setLoadingConfig(false);
         }
@@ -72,14 +61,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (session?.user && supabase) {
+    if (supabase) {
       fetchHistory();
     }
-  }, [session]);
+  }, [supabase]);
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch(`/api/history/${session!.user.id}`);
+      const res = await fetch(`/api/history/${mockUserId}`);
       const data = await res.json();
       if (res.ok) {
         setHistory(data.history || []);
@@ -87,34 +76,6 @@ export default function App() {
     } catch (err) {
       console.error(err);
     }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!supabase) return setAuthError('Supabase config missing');
-    setAuthLoading(true);
-    setAuthError('');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setAuthError(error.message);
-    setAuthLoading(false);
-  };
-
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!supabase) return setAuthError('Supabase config missing');
-    setAuthLoading(true);
-    setAuthError('');
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) setAuthError(error.message);
-    else setAuthError("Signup successful! Please check your email to verify (if enabled), or login.");
-    setAuthLoading(false);
-  };
-
-  const handleLogout = async () => {
-    supabase?.auth.signOut();
-    setResults([]);
-    setHistory([]);
-    setActiveSearchId(null);
   };
 
   const loadPastSearch = async (searchId: string) => {
@@ -136,7 +97,7 @@ export default function App() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim() || !session) return;
+    if (!query.trim()) return;
     setLoading(true);
     setError('');
     setActiveSearchId(null);
@@ -148,7 +109,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query,
-          userId: session.user.id,
+          userId: mockUserId,
           minSubs,
           maxSubs,
           timeframeDays: timeframe
@@ -217,66 +178,6 @@ export default function App() {
     );
   }
 
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 font-sans">
-         <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center mb-6">
-            <Activity size={24} color="white" />
-         </div>
-         <div className="max-w-md w-full bg-white border border-gray-200 rounded-2xl p-8 shadow-sm">
-            <h1 className="text-2xl font-bold tracking-tight text-center text-gray-900 mb-6">Welcome Back</h1>
-            
-            {authError && (
-              <div className="mb-4 p-3 bg-red-50 text-red-800 text-sm rounded-lg border border-red-100 flex items-start gap-2">
-                <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                <p>{authError}</p>
-              </div>
-            )}
-            
-            <form className="space-y-4">
-               <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
-                  />
-               </div>
-               <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
-                  />
-               </div>
-               
-               <div className="flex gap-3 pt-2">
-                 <button 
-                  onClick={handleLogin}
-                  disabled={authLoading}
-                  className="flex-1 bg-black text-white rounded-lg py-2.5 text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50"
-                 >
-                   {authLoading ? 'Signing in...' : 'Sign In'}
-                 </button>
-                 <button 
-                  onClick={handleSignup}
-                  disabled={authLoading}
-                  className="flex-1 bg-white text-black border border-gray-200 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
-                 >
-                   Create Account
-                 </button>
-               </div>
-            </form>
-         </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       <header className="h-[60px] bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 shrink-0 sticky top-0 z-20">
@@ -288,13 +189,6 @@ export default function App() {
             <Activity size={18} color="white" />
           </div>
           <span className="font-semibold text-gray-900 tracking-tight text-lg hidden sm:block">Outlier Finder</span>
-        </div>
-        
-        <div className="flex items-center gap-4 text-sm font-medium">
-           <span className="text-gray-500 hidden sm:block">{session.user.email}</span>
-           <button onClick={handleLogout} className="flex items-center gap-2 text-gray-600 hover:text-black transition-colors px-3 py-1.5 rounded-md hover:bg-gray-100">
-             <LogOut size={16} /> <span className="hidden sm:inline">Logout</span>
-           </button>
         </div>
       </header>
       

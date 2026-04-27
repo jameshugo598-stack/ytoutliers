@@ -67,11 +67,25 @@ app.post('/api/search-outliers', async (req, res) => {
     if (!supabase) return res.status(400).json({ error: 'Supabase credentials missing.' });
     
     // 1. Check Limits in Database
-    const { data: profile, error: profileErr } = await supabase
+    let { data: profile, error: profileErr } = await supabase
       .from('user_profiles')
       .select('searches_used, search_limit')
       .eq('id', userId)
       .single();
+      
+    if (profileErr && profileErr.code === 'PGRST116') {
+      // Create mock profile if it doesn't exist
+      const { data: newProfile, error: insertErr } = await supabase
+        .from('user_profiles')
+        .insert({ id: userId, email: 'mock@example.com', search_limit: 100 })
+        .select('searches_used, search_limit')
+        .single();
+      
+      if (!insertErr && newProfile) {
+        profile = newProfile;
+        profileErr = null;
+      }
+    }
       
     if (profileErr && profileErr.code !== 'PGRST116' && profileErr.code !== '42P01' && !profileErr.message?.includes('does not exist')) {
       console.warn("Profile fetch error:", profileErr.message);

@@ -257,7 +257,7 @@ export default function App() {
         <div className="max-w-md w-full bg-white border border-red-200 rounded-xl p-6 text-center shadow-sm">
           <AlertCircle size={32} className="mx-auto text-red-500 mb-4" />
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Database Connection Missing</h2>
-          <p className="text-gray-600 text-sm">Please set the <code className="bg-gray-100 px-1 py-0.5 rounded">SUPABASE_URL</code> and <code className="bg-gray-100 px-1 py-0.5 rounded">SUPABASE_ANON_KEY</code> environment variables in your deployment settings (like Vercel or AI Studio) to continue.</p>
+          <p className="text-gray-600 text-sm">Please set the <code className="bg-gray-100 px-1 py-0.5 rounded">NEXT_PUBLIC_SUPABASE_URL</code> and <code className="bg-gray-100 px-1 py-0.5 rounded">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> environment variables in your deployment settings (like Vercel or AI Studio) to continue.</p>
         </div>
       </div>
     );

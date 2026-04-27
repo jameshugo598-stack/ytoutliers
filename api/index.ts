@@ -20,7 +20,7 @@ app.get('/api/test-env', (req, res) => {
 });
 
 app.get('/api/config', (req, res) => {
-  let url = process.env.SUPABASE_URL?.trim();
+  let url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim();
   if (url) {
     try {
       const parsed = new URL(url);
@@ -29,14 +29,14 @@ app.get('/api/config', (req, res) => {
   }
   res.json({
     supabaseUrl: url,
-    supabaseAnonKey: process.env.SUPABASE_ANON_KEY?.trim()
+    supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || process.env.SUPABASE_ANON_KEY?.trim()
   });
 });
 
 // Helper to get Supabase client
 function getSupabaseClient() {
-  let url = process.env.SUPABASE_URL?.trim();
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_ANON_KEY?.trim();
+  let url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || process.env.SUPABASE_ANON_KEY?.trim();
   
   if (!url || !key) {
     console.warn('Supabase credentials missing in environment.');

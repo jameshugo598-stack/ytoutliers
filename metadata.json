@@ -1,0 +1,6 @@
+{
+  "name": "YouTube Outlier Dashboard",
+  "description": "Analyze YouTube channels to find significant outliers in views.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

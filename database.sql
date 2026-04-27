@@ -3,16 +3,13 @@ DROP TABLE IF EXISTS outlier_results CASCADE;
 DROP TABLE IF EXISTS user_searches CASCADE;
 DROP TABLE IF EXISTS user_profiles CASCADE;
 
-
 -- 2. Create User Profiles Table (Tracks search limits)
--- Note: In the future, this can reference auth.users(id), but for now we remove the FK 
--- so that the app can be used without login using a generated mock user ID.
 CREATE TABLE user_profiles (
-    id UUID PRIMARY KEY,
+    id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
     email TEXT,
     tier TEXT DEFAULT 'free', -- 'free', 'pro', or 'lifetime'
     searches_used INT DEFAULT 0,
-    search_limit INT DEFAULT 30, -- Increased limit since we removed auth
+    search_limit INT DEFAULT 3, -- Free tier gets 3 searches
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -39,8 +36,21 @@ CREATE TABLE outlier_results (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 5. Disable RLS for now since login is removed.
--- (We will re-enable it when you integrate auth later)
-ALTER TABLE user_profiles DISABLE ROW LEVEL SECURITY;
-ALTER TABLE user_searches DISABLE ROW LEVEL SECURITY;
-ALTER TABLE outlier_results DISABLE ROW LEVEL SECURITY;
+-- 5. Enable RLS
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_searches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE outlier_results ENABLE ROW LEVEL SECURITY;
+
+-- 6. Create RLS Policies
+CREATE POLICY "Users can view their own profile" ON user_profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update their own profile" ON user_profiles FOR UPDATE USING (auth.uid() = id);
+
+CREATE POLICY "Users can view their own searches" ON user_searches FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own searches" ON user_searches FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can view their own results" ON outlier_results FOR SELECT USING (
+    EXISTS (SELECT 1 FROM user_searches WHERE user_searches.id = outlier_results.search_id AND user_searches.user_id = auth.uid())
+);
+CREATE POLICY "Users can insert results" ON outlier_results FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM user_searches WHERE user_searches.id = outlier_results.search_id AND user_searches.user_id = auth.uid())
+);

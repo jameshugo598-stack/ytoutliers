@@ -603,18 +603,15 @@ export default function App() {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {results.map((video, idx) => (
-                  <a
+                  <div
                     key={`${video.video_id}-${idx}`}
-                    href={`https://youtube.com/watch?v=${video.video_id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group flex flex-col bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200"
+                    className="group flex flex-col bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm transition-all duration-200"
                   >
                     <div className="aspect-video w-full bg-gray-100 relative overflow-hidden">
                       <img 
                         src={`https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`} 
                         alt="" 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="w-full h-full object-cover transition-transform duration-300"
                         loading="lazy"
                         onError={(e) => {
                            // Fallback if hqdefault.jpg 404s
@@ -627,8 +624,15 @@ export default function App() {
                     </div>
                     
                     <div className="p-4 flex flex-col flex-1">
-                      <h3 className="font-semibold text-gray-900 text-sm leading-snug line-clamp-2 mb-2 group-hover:text-black underline-offset-2 group-hover:underline">
-                        {video.title}
+                      <h3 className="font-semibold text-gray-900 text-sm leading-snug line-clamp-2 mb-2">
+                        <a
+                          href={`https://youtube.com/watch?v=${video.video_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="hover:underline underline-offset-2"
+                        >
+                          {video.title}
+                        </a>
                       </h3>
                       <div className="flex items-center gap-2 mb-4 text-xs text-gray-500">
                         <Youtube size={14} className="text-red-500 shrink-0" />
@@ -658,7 +662,7 @@ export default function App() {
                         </div>
                       </div>
                     </div>
-                  </a>
+                  </div>
                 ))}
               </div>
             </div>

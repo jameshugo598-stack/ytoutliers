@@ -111,22 +111,31 @@ app.post('/api/search-outliers', async (req, res) => {
     const publishedAfterDate = new Date(Date.now() - timeframe * 24 * 60 * 60 * 1000);
     const publishedAfter = publishedAfterDate.toISOString();
 
-    // Step 1: Search Videos
+    // Step 1: Bucket A (The Target Videos)
     const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&publishedAfter=${publishedAfter}&key=${key}`;
     const searchRes = await fetch(searchUrl).then(r=>r.json());
     if(searchRes.error) throw new Error(searchRes.error.message);
     if(!searchRes.items || searchRes.items.length === 0) return res.json({ message: 'No videos found', results: [] });
 
-    // Extract unique channelIds
+    const targetVideos: any[] = [];
     const channelIdsSet = new Set<string>();
+
     searchRes.items.forEach((item: any) => {
-      if (item.snippet && item.snippet.channelId) {
+      if (item.snippet && item.snippet.channelId && item.id && item.id.videoId) {
         channelIdsSet.add(item.snippet.channelId);
+        targetVideos.push({
+           videoId: item.id.videoId,
+           channelId: item.snippet.channelId,
+           channelTitle: item.snippet.channelTitle,
+           title: item.snippet.title,
+           publishedAt: item.snippet.publishedAt
+        });
       }
     });
+
     const channelIds = Array.from(channelIdsSet);
 
-    // Step 2: Filter by Subs
+    // Step 2: Filter Channels by Sub Count
     const validChannels: any[] = [];
     const chunkedChannelIds = [];
     for (let i = 0; i < channelIds.length; i += 50) {
@@ -152,97 +161,94 @@ app.post('/api/search-outliers', async (req, res) => {
 
     if (validChannels.length === 0) return res.json({ message: 'No channels matching subscriber criteria found', results: [] });
 
-    // Step 3: Playlist Hack
-    let allRecentVideos: {videoId: string, channel: any}[] = [];
+    // Filter targetVideos to only keep those belonging to surviving channels
+    const validChannelIds = new Set(validChannels.map(c => c.id));
+    const survivingTargetVideos = targetVideos.filter(v => validChannelIds.has(v.channelId));
+
+    if (survivingTargetVideos.length === 0) return res.json({ message: 'No target videos matching subscriber criteria found', results: [] });
+
+    // Step 3: Bucket B (The Math Videos / Playlist Hack)
+    let mathVideos: {videoId: string, channelId: string}[] = [];
     
     await Promise.all(validChannels.map(async (channel) => {
        const uploadsId = 'UU' + channel.id.substring(2);
-       const pUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsId}&maxResults=15&key=${key}`;
+       const pUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsId}&maxResults=10&key=${key}`;
        try {
          const pRes = await fetch(pUrl).then(r=>r.json());
          if (pRes.items) {
            pRes.items.forEach((item: any) => {
-             const pubDate = new Date(item.snippet.publishedAt);
-             if (pubDate >= publishedAfterDate) {
-               allRecentVideos.push({ videoId: item.snippet.resourceId.videoId, channel });
-             }
+              if (item.snippet && item.snippet.resourceId && item.snippet.resourceId.videoId) {
+                 mathVideos.push({ videoId: item.snippet.resourceId.videoId, channelId: channel.id });
+              }
            });
          }
        } catch(e) { console.error(`Error fetching playlist for ${channel.id}:`, e) }
     }));
 
-    if (allRecentVideos.length === 0) return res.json({message: 'No recent videos found in the selected timeframe', results: []});
+    // Step 4: Fetch Statistics (Remove Duration Filter)
+    const allVideoIdsSet = new Set<string>();
+    survivingTargetVideos.forEach(v => allVideoIdsSet.add(v.videoId));
+    mathVideos.forEach(v => allVideoIdsSet.add(v.videoId));
+    const allVideoIds = Array.from(allVideoIdsSet);
 
-    // Step 4: Fetch Stats & Filter Shorts
-    let finalVideos: any[] = [];
+    const videoStats: Record<string, number> = {};
     const chunkSize = 50;
-    
-    // Parse duration helper (e.g. PT1M30S)
-    const parseDurationToSeconds = (duration: string) => {
-      const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-      if (!match) return 0;
-      const hours = parseInt(match[1] || '0', 10);
-      const minutes = parseInt(match[2] || '0', 10);
-      const seconds = parseInt(match[3] || '0', 10);
-      return hours * 3600 + minutes * 60 + seconds;
-    };
 
-    for (let i = 0; i < allRecentVideos.length; i += chunkSize) {
-        const chunk = allRecentVideos.slice(i, i + chunkSize);
-        const vIds = chunk.map(x => x.videoId).join(',');
-        const vUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${vIds}&key=${key}`;
+    for (let i = 0; i < allVideoIds.length; i += chunkSize) {
+        const chunk = allVideoIds.slice(i, i + chunkSize);
+        const vIds = chunk.join(',');
+        const vUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${vIds}&key=${key}`;
         const vRes = await fetch(vUrl).then(r=>r.json());
         
         if (vRes.items) {
            vRes.items.forEach((vItem: any) => {
-              const durSecs = parseDurationToSeconds(vItem.contentDetails?.duration || '');
-              if (durSecs >= 60) {
-                 const match = chunk.find(x => x.videoId === vItem.id);
-                 if (match) {
-                    const views = parseInt(vItem.statistics.viewCount || '0', 10);
-                    finalVideos.push({
-                       video_id: vItem.id,
-                       channel_id: match.channel.id,
-                       channel_name: match.channel.title,
-                       title: vItem.snippet.title,
-                       published_at: vItem.snippet.publishedAt,
-                       views: views,
-                       subscriber_count: match.channel.subscriberCount
-                    });
-                 }
-              }
+              const views = parseInt(vItem.statistics?.viewCount || '0', 10);
+              videoStats[vItem.id] = views;
            });
         }
     }
 
-    // Step 5: True Outlier Math
-    // Group by channel
-    const channelGroups: Record<string, any[]> = {};
-    finalVideos.forEach(v => {
-      if (!channelGroups[v.channel_id]) channelGroups[v.channel_id] = [];
-      channelGroups[v.channel_id].push(v);
+    // Assign stats to mathVideos to calculate baseline
+    const channelGroupsForMath: Record<string, number[]> = {};
+    mathVideos.forEach(v => {
+      const views = videoStats[v.videoId] || 0;
+      if (!channelGroupsForMath[v.channelId]) channelGroupsForMath[v.channelId] = [];
+      channelGroupsForMath[v.channelId].push(views);
     });
 
-    const videosWithScores: any[] = [];
-    for (const channelId in channelGroups) {
-      const videos = channelGroups[channelId];
-      const totalViews = videos.reduce((acc, v) => acc + v.views, 0);
-      const baseline_average_views = videos.length > 0 ? Math.round(totalViews / videos.length) : 0;
-      
-      videos.forEach(v => {
-        const outlier_score = baseline_average_views > 0 ? (v.views / baseline_average_views) : 0;
-        videosWithScores.push({
-          ...v,
-          baseline_average_views,
-          outlier_score: parseFloat(outlier_score.toFixed(4))
-        });
-      });
+    // Step 5: True Outlier Math
+    const baselineAverages: Record<string, number> = {};
+    for (const channelId in channelGroupsForMath) {
+       const viewsArray = channelGroupsForMath[channelId];
+       const totalViews = viewsArray.reduce((sum, v) => sum + v, 0);
+       baselineAverages[channelId] = viewsArray.length > 0 ? Math.round(totalViews / viewsArray.length) : 0;
     }
 
-    // Filter < 1000 views and Sort
-    const filteredAndSorted = videosWithScores
-      .filter(v => v.views >= 1000)
-      .sort((a, b) => b.outlier_score - a.outlier_score);
+    const finalTargetVideos: any[] = [];
+    survivingTargetVideos.forEach(v => {
+       const views = videoStats[v.videoId] || 0;
+       const baseline = baselineAverages[v.channelId] || 0;
+       const outlier_score = baseline > 0 ? (views / baseline) : 0;
+       
+       const channelInfo = validChannels.find(c => c.id === v.channelId);
+       
+       if (views >= 1000) {
+          finalTargetVideos.push({
+             video_id: v.videoId,
+             channel_id: v.channelId,
+             channel_name: v.channelTitle || (channelInfo ? channelInfo.title : ''),
+             title: v.title,
+             published_at: v.publishedAt,
+             views: views,
+             subscriber_count: channelInfo ? channelInfo.subscriberCount : 0,
+             baseline_average_views: baseline,
+             outlier_score: parseFloat(outlier_score.toFixed(4))
+          });
+       }
+    });
+
+    // Sort targetVideos descending by outlier_score
+    const filteredAndSorted = finalTargetVideos.sort((a, b) => b.outlier_score - a.outlier_score);
 
     // Database Actions: Update used searches, save search log, and save results
     

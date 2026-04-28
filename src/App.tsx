@@ -37,8 +37,8 @@ export default function App() {
 
   // Search State
   const [query, setQuery] = useState('');
-  const [minSubs, setMinSubs] = useState(0);
-  const [maxSubs, setMaxSubs] = useState(1000000);
+  const [minSubs, setMinSubs] = useState<number | ''>(0);
+  const [maxSubs, setMaxSubs] = useState<number | ''>(1000000);
   const [timeframe, setTimeframe] = useState(30);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<OutlierResult[]>([]);
@@ -208,8 +208,8 @@ export default function App() {
         body: JSON.stringify({
           query,
           userId: session.user.id,
-          minSubs,
-          maxSubs,
+          minSubs: minSubs === '' ? 0 : minSubs,
+          maxSubs: maxSubs === '' ? 1000000 : maxSubs,
           timeframeDays: timeframe
         })
       });
@@ -420,16 +420,16 @@ export default function App() {
                  <div>
                     <label className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">
                        <span>Min Subscribers</span>
-                       <input type="number" min="0" value={minSubs} onChange={(e) => setMinSubs(Number(e.target.value))} className="text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md w-24 text-right text-sm outline-none border border-transparent focus:border-gray-300" />
+                       <input type="number" min="0" value={minSubs} onChange={(e) => setMinSubs(e.target.value === '' ? '' : Number(e.target.value))} className="text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md w-24 text-right text-sm outline-none border border-transparent focus:border-gray-300" />
                     </label>
-                    <input type="range" min="0" max="1000000" step="1000" value={minSubs} onChange={(e) => setMinSubs(Number(e.target.value))} className="w-full accent-black cursor-pointer" />
+                    <input type="range" min="0" max="1000000" step="1000" value={minSubs === '' ? 0 : minSubs} onChange={(e) => setMinSubs(Number(e.target.value))} className="w-full accent-black cursor-pointer" />
                  </div>
                  <div>
                     <label className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">
                        <span>Max Subscribers</span>
-                       <input type="number" min="0" value={maxSubs} onChange={(e) => setMaxSubs(Number(e.target.value))} className="text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md w-24 text-right text-sm outline-none border border-transparent focus:border-gray-300" />
+                       <input type="number" min="0" value={maxSubs} onChange={(e) => setMaxSubs(e.target.value === '' ? '' : Number(e.target.value))} className="text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md w-24 text-right text-sm outline-none border border-transparent focus:border-gray-300" />
                     </label>
-                    <input type="range" min="0" max="1000000" step="5000" value={maxSubs} onChange={(e) => setMaxSubs(Number(e.target.value))} className="w-full accent-black cursor-pointer" />
+                    <input type="range" min="0" max="1000000" step="5000" value={maxSubs === '' ? 1000000 : maxSubs} onChange={(e) => setMaxSubs(Number(e.target.value))} className="w-full accent-black cursor-pointer" />
                  </div>
                  <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">
@@ -527,9 +527,9 @@ export default function App() {
                           <div className="text-gray-500 mb-0.5 font-medium">Baseline Avg</div>
                           <div className="font-bold text-gray-900">{(video.baseline_average_views || 0).toLocaleString()}</div>
                         </div>
-                        <div className="bg-[#E1F5EE] px-3 py-2.5 rounded-lg border border-[#A7E2CE] flex flex-col items-center">
-                          <div className="text-[#0F6E56] mb-0.5 font-medium">Outlier Score</div>
-                          <div className="font-bold text-[#0F6E56] text-sm">{(video.outlier_score || 0).toFixed(1)}x</div>
+                        <div className="bg-[#0F6E56] px-3 py-2.5 rounded-lg border border-[#0F6E56] flex flex-col items-center shadow-inner">
+                          <div className="text-[#E1F5EE] mb-0.5 font-medium uppercase tracking-widest" style={{fontSize: '0.65rem'}}>Outlier Score</div>
+                          <div className="font-black text-white text-lg leading-tight">{(video.outlier_score || 0).toFixed(1)}x</div>
                         </div>
                       </div>
                     </div>

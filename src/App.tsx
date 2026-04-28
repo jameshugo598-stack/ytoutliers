@@ -100,10 +100,10 @@ export default function App() {
 
 
   useEffect(() => {
-    if (supabase) {
+    if (supabase && session) {
       fetchHistory();
     }
-  }, [supabase]);
+  }, [supabase, session]);
 
   const fetchHistory = async () => {
     if (!session) return;

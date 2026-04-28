@@ -45,8 +45,18 @@ export default function App() {
   const [results, setResults] = useState<OutlierResult[]>([]);
   const [error, setError] = useState('');
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [pendingSearch, setPendingSearch] = useState(false);
 
   const PAYMENT_LINK = "https://ko-fi.com/s/e5a299ba8f";
+
+  useEffect(() => {
+    if (session && pendingSearch) {
+      setPendingSearch(false);
+      setShowLoginModal(false);
+      executeSearch();
+    }
+  }, [session, pendingSearch]);
 
   useEffect(() => {
     fetch('/api/config')
@@ -209,6 +219,16 @@ export default function App() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!query.trim()) return;
+    if (!session?.user?.id) {
+       setPendingSearch(true);
+       setShowLoginModal(true);
+       return;
+    }
+    await executeSearch();
+  };
+
+  const executeSearch = async () => {
     if (!query.trim() || !session?.user?.id) return;
     setLoading(true);
     setError('');
@@ -305,44 +325,6 @@ export default function App() {
     );
   }
 
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 font-sans">
-         <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center mb-6 shadow-md">
-            <Activity size={24} color="white" />
-         </div>
-         <div className="max-w-md w-full bg-white border border-gray-200 rounded-2xl p-8 shadow-sm text-center">
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-2">Welcome to Outlier Finder</h1>
-            <p className="text-gray-500 text-sm mb-8">Discover high-performing YouTube channels in seconds.</p>
-            
-            {authError && (
-              <div className="mb-6 p-3 bg-red-50 text-red-800 text-sm rounded-lg border border-red-100 flex items-start gap-2 text-left">
-                <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                <p>{authError}</p>
-              </div>
-            )}
-            
-            <button 
-              onClick={handleGoogleLogin}
-              disabled={authLoading}
-              className="cursor-pointer w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-800 rounded-xl py-3 px-4 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 shadow-sm"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C4.01 20.61 7.71 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.71 1 4.01 3.39 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-              </svg>
-              {authLoading ? 'Signing in...' : 'Continue with Google'}
-            </button>
-            <p className="mt-5 text-xs text-gray-400">
-              By continuing, you agree to our Terms of Service and Privacy Policy.
-            </p>
-         </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       <header className="h-[60px] bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 shrink-0 sticky top-0 z-20">
@@ -357,10 +339,18 @@ export default function App() {
         </div>
         
         <div className="flex items-center gap-4 text-sm font-medium">
-           <span className="text-gray-500 hidden sm:block">{session?.user?.email}</span>
-           <button onClick={handleLogout} className="cursor-pointer flex items-center gap-2 text-gray-600 hover:text-black transition-colors px-3 py-1.5 rounded-md hover:bg-gray-100">
-             <LogOut size={16} /> <span className="hidden sm:inline">Logout</span>
-           </button>
+           {session ? (
+             <>
+               <span className="text-gray-500 hidden sm:block">{session.user.email}</span>
+               <button onClick={handleLogout} className="cursor-pointer flex items-center gap-2 text-gray-600 hover:text-black transition-colors px-3 py-1.5 rounded-md hover:bg-gray-100">
+                 <LogOut size={16} /> <span className="hidden sm:inline">Logout</span>
+               </button>
+             </>
+           ) : (
+             <button onClick={() => setShowLoginModal(true)} className="cursor-pointer flex items-center gap-2 bg-black text-white hover:bg-gray-800 transition-colors px-4 py-2 rounded-lg font-medium shadow-sm">
+               Sign Up / Sign In
+             </button>
+           )}
         </div>
       </header>
       
@@ -368,6 +358,50 @@ export default function App() {
         {/* Overlay for mobile sidebar */}
         {sidebarOpen && (
            <div className="fixed inset-0 bg-black/20 z-20 md:hidden block" onClick={() => setSidebarOpen(false)} />
+        )}
+
+        {/* Login Modal */}
+        {showLoginModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white max-w-md w-full rounded-2xl p-8 relative shadow-2xl text-center">
+              <button 
+                onClick={() => { setShowLoginModal(false); setPendingSearch(false); }}
+                className="cursor-pointer absolute top-4 right-4 text-gray-400 hover:text-black"
+              >
+                <X size={20} />
+              </button>
+              
+              <div className="w-12 h-12 bg-black text-white rounded-xl flex items-center justify-center mb-6 mx-auto shadow-md">
+                <Activity size={24} />
+              </div>
+              
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign in to Search</h2>
+              <p className="text-gray-600 mb-6 text-sm">
+                Join Outlier Finder to find high-performing videos and track your historical searches.
+              </p>
+
+              {authError && (
+                <div className="mb-6 p-3 bg-red-50 text-red-800 text-sm rounded-lg border border-red-100 flex items-start gap-2 text-left">
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                  <p>{authError}</p>
+                </div>
+              )}
+              
+              <button 
+                onClick={handleGoogleLogin}
+                disabled={authLoading}
+                className="cursor-pointer w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-800 rounded-xl py-3 px-4 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 shadow-sm"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C4.01 20.61 7.71 23 12 23z" fill="#34A853"/>
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.71 1 4.01 3.39 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                </svg>
+                {authLoading ? 'Signing in...' : 'Continue with Google'}
+              </button>
+            </div>
+          </div>
         )}
         
         {/* Paywall Modal */}
@@ -431,7 +465,7 @@ export default function App() {
            <div className="flex-1 overflow-y-auto">
              {history.length === 0 ? (
                 <div className="p-6 text-center text-sm text-gray-500">
-                  No previous searches yet.
+                  {!session ? "Sign in to save and view past searches." : "No previous searches yet."}
                 </div>
              ) : (
                 <ul className="py-2">

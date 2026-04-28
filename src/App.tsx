@@ -10,7 +10,8 @@ interface OutlierResult {
   thumbnail_url: string;
   views: number;
   subscriber_count: number;
-  outlier_ratio: number;
+  baseline_average_views: number;
+  outlier_score: number;
   published_at: string;
 }
 
@@ -237,14 +238,15 @@ export default function App() {
     if (results.length === 0) return;
     
     // Explicitly dropping likes/comments from exports too
-    const headers = ['Video ID', 'Title', 'Channel', 'Views', 'Subscribers', 'Outlier Ratio', 'Published At', 'URL'];
+    const headers = ['Video ID', 'Title', 'Channel', 'Views', 'Subscribers', 'Baseline Average', 'Outlier Score', 'Published At', 'URL'];
     const rows = results.map(r => [
       r.video_id,
       `"${(r.title || '').replace(/"/g, '""')}"`,
       `"${(r.channel_name || '').replace(/"/g, '""')}"`,
       r.views,
       r.subscriber_count,
-      r.outlier_ratio,
+      r.baseline_average_views,
+      r.outlier_score,
       r.published_at,
       `https://youtube.com/watch?v=${r.video_id}`
     ]);
@@ -414,18 +416,18 @@ export default function App() {
                 </button>
               </div>
               
-              <div className="border-t border-gray-100 pt-5 grid grid-cols-1 sm:grid-cols-3 gap-6">
+               <div className="border-t border-gray-100 pt-5 grid grid-cols-1 sm:grid-cols-3 gap-6">
                  <div>
                     <label className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">
                        <span>Min Subscribers</span>
-                       <span className="text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md">{minSubs.toLocaleString()}</span>
+                       <input type="number" min="0" value={minSubs} onChange={(e) => setMinSubs(Number(e.target.value))} className="text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md w-24 text-right text-sm outline-none border border-transparent focus:border-gray-300" />
                     </label>
                     <input type="range" min="0" max="1000000" step="1000" value={minSubs} onChange={(e) => setMinSubs(Number(e.target.value))} className="w-full accent-black cursor-pointer" />
                  </div>
                  <div>
                     <label className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">
                        <span>Max Subscribers</span>
-                       <span className="text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md">{maxSubs >= 1000000 ? '1M+' : maxSubs.toLocaleString()}</span>
+                       <input type="number" min="0" value={maxSubs} onChange={(e) => setMaxSubs(Number(e.target.value))} className="text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md w-24 text-right text-sm outline-none border border-transparent focus:border-gray-300" />
                     </label>
                     <input type="range" min="0" max="1000000" step="5000" value={maxSubs} onChange={(e) => setMaxSubs(Number(e.target.value))} className="w-full accent-black cursor-pointer" />
                  </div>
@@ -485,7 +487,7 @@ export default function App() {
                   >
                     <div className="aspect-video w-full bg-gray-100 relative overflow-hidden">
                       <img 
-                        src={video.thumbnail_url} 
+                        src={`https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`} 
                         alt="" 
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         loading="lazy"
@@ -496,10 +498,6 @@ export default function App() {
                       />
                       <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-md text-black font-mono text-xs font-bold px-2 py-1 rounded shadow-sm">
                         #{idx + 1}
-                      </div>
-                      <div className="absolute top-3 right-3 bg-black/85 backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 rounded flex items-center gap-1.5 shadow-sm">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#1D9E75] animate-pulse"></span>
-                        {video.outlier_ratio.toFixed(1)}x V/S
                       </div>
                     </div>
                     
@@ -513,7 +511,7 @@ export default function App() {
                         <span className="shrink-0">{new Date(video.published_at).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</span>
                       </div>
                       
-                      <div className="mt-auto grid grid-cols-2 gap-2 text-xs">
+                      <div className="mt-auto grid grid-cols-2 gap-2 text-xs mb-2">
                         <div className="bg-gray-50 px-3 py-2.5 rounded-lg border border-gray-100 flex flex-col items-center">
                           <div className="text-gray-500 mb-0.5 font-medium">Views</div>
                           <div className="font-bold text-gray-900">{(video.views || 0).toLocaleString()}</div>
@@ -521,6 +519,17 @@ export default function App() {
                         <div className="bg-gray-50 px-3 py-2.5 rounded-lg border border-gray-100 flex flex-col items-center">
                           <div className="text-gray-500 mb-0.5 font-medium">Subscribers</div>
                           <div className="font-bold text-gray-900">{(video.subscriber_count || 0).toLocaleString()}</div>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-gray-50 px-3 py-2.5 rounded-lg border border-gray-100 flex flex-col items-center">
+                          <div className="text-gray-500 mb-0.5 font-medium">Baseline Avg</div>
+                          <div className="font-bold text-gray-900">{(video.baseline_average_views || 0).toLocaleString()}</div>
+                        </div>
+                        <div className="bg-[#E1F5EE] px-3 py-2.5 rounded-lg border border-[#A7E2CE] flex flex-col items-center">
+                          <div className="text-[#0F6E56] mb-0.5 font-medium">Outlier Score</div>
+                          <div className="font-bold text-[#0F6E56] text-sm">{(video.outlier_score || 0).toFixed(1)}x</div>
                         </div>
                       </div>
                     </div>

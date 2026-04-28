@@ -107,46 +107,63 @@ app.post('/api/search-outliers', async (req, res) => {
 
     const key = getYouTubeKey();
 
-    // 2. Search Channels directly
-    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=50&q=${encodeURIComponent(query)}&key=${key}`;
+    const timeframe = parseInt(timeframeDays as string) || 30;
+    const publishedAfterDate = new Date(Date.now() - timeframe * 24 * 60 * 60 * 1000);
+    const publishedAfter = publishedAfterDate.toISOString();
+
+    // Step 1: Search Videos
+    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&publishedAfter=${publishedAfter}&key=${key}`;
     const searchRes = await fetch(searchUrl).then(r=>r.json());
     if(searchRes.error) throw new Error(searchRes.error.message);
-    if(!searchRes.items || searchRes.items.length === 0) return res.json({ message: 'No channels found', results: [] });
+    if(!searchRes.items || searchRes.items.length === 0) return res.json({ message: 'No videos found', results: [] });
 
-    const channelIds = searchRes.items.map((item: any) => item.snippet.channelId);
+    // Extract unique channelIds
+    const channelIdsSet = new Set<string>();
+    searchRes.items.forEach((item: any) => {
+      if (item.snippet && item.snippet.channelId) {
+        channelIdsSet.add(item.snippet.channelId);
+      }
+    });
+    const channelIds = Array.from(channelIdsSet);
 
-    // 3. Channels API Endpoint
-    const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelIds.join(',')}&key=${key}`;
-    const channelsRes = await fetch(channelsUrl).then(r=>r.json());
-    if(channelsRes.error) throw new Error(channelsRes.error.message);
-
+    // Step 2: Filter by Subs
     const validChannels: any[] = [];
-    for (const c of channelsRes.items || []) {
-       const subs = parseInt(c.statistics.subscriberCount || '0', 10);
-       if (subs >= minSubs && subs <= maxSubs) {
-          validChannels.push({
-             id: c.id,
-             title: c.snippet.title,
-             subscriberCount: subs
-          });
-       }
+    const chunkedChannelIds = [];
+    for (let i = 0; i < channelIds.length; i += 50) {
+      chunkedChannelIds.push(channelIds.slice(i, i + 50));
+    }
+    
+    for (const chunk of chunkedChannelIds) {
+      const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${chunk.join(',')}&key=${key}`;
+      const channelsRes = await fetch(channelsUrl).then(r=>r.json());
+      if(channelsRes.error) throw new Error(channelsRes.error.message);
+
+      for (const c of channelsRes.items || []) {
+         const subs = parseInt(c.statistics.subscriberCount || '0', 10);
+         if (subs >= (minSubs as number) && subs <= (maxSubs as number)) {
+            validChannels.push({
+               id: c.id,
+               title: c.snippet.title,
+               subscriberCount: subs
+            });
+         }
+      }
     }
 
-    // 4. The Playlist Trick & Fetch Videos
+    if (validChannels.length === 0) return res.json({ message: 'No channels matching subscriber criteria found', results: [] });
+
+    // Step 3: Playlist Hack
     let allRecentVideos: {videoId: string, channel: any}[] = [];
     
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - (parseInt(timeframeDays as string) || 30));
-
     await Promise.all(validChannels.map(async (channel) => {
        const uploadsId = 'UU' + channel.id.substring(2);
-       const pUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsId}&maxResults=10&key=${key}`;
+       const pUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsId}&maxResults=15&key=${key}`;
        try {
          const pRes = await fetch(pUrl).then(r=>r.json());
          if (pRes.items) {
            pRes.items.forEach((item: any) => {
              const pubDate = new Date(item.snippet.publishedAt);
-             if (pubDate >= cutoffDate) {
+             if (pubDate >= publishedAfterDate) {
                allRecentVideos.push({ videoId: item.snippet.resourceId.videoId, channel });
              }
            });
@@ -156,44 +173,76 @@ app.post('/api/search-outliers', async (req, res) => {
 
     if (allRecentVideos.length === 0) return res.json({message: 'No recent videos found in the selected timeframe', results: []});
 
-    // 5. Batch Statistics
+    // Step 4: Fetch Stats & Filter Shorts
     let finalVideos: any[] = [];
     const chunkSize = 50;
+    
+    // Parse duration helper (e.g. PT1M30S)
+    const parseDurationToSeconds = (duration: string) => {
+      const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+      if (!match) return 0;
+      const hours = parseInt(match[1] || '0', 10);
+      const minutes = parseInt(match[2] || '0', 10);
+      const seconds = parseInt(match[3] || '0', 10);
+      return hours * 3600 + minutes * 60 + seconds;
+    };
+
     for (let i = 0; i < allRecentVideos.length; i += chunkSize) {
         const chunk = allRecentVideos.slice(i, i + chunkSize);
         const vIds = chunk.map(x => x.videoId).join(',');
-        const vUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${vIds}&key=${key}`;
+        const vUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${vIds}&key=${key}`;
         const vRes = await fetch(vUrl).then(r=>r.json());
         
         if (vRes.items) {
            vRes.items.forEach((vItem: any) => {
-              const match = chunk.find(x => x.videoId === vItem.id);
-              if (match) {
-                 const views = parseInt(vItem.statistics.viewCount || '0', 10);
-                 
-                 // 6. Calculate Metrics
-                 const ratio = match.channel.subscriberCount > 0 ? (views / match.channel.subscriberCount) : 0;
-                 
-                 finalVideos.push({
-                    video_id: vItem.id,
-                    channel_id: match.channel.id,
-                    channel_name: match.channel.title,
-                    title: vItem.snippet.title,
-                    thumbnail_url: `https://img.youtube.com/vi/${vItem.id}/hqdefault.jpg`,
-                    published_at: vItem.snippet.publishedAt,
-                    views: views,
-                    subscriber_count: match.channel.subscriberCount,
-                    outlier_ratio: parseFloat(ratio.toFixed(4))
-                 });
+              const durSecs = parseDurationToSeconds(vItem.contentDetails?.duration || '');
+              if (durSecs >= 60) {
+                 const match = chunk.find(x => x.videoId === vItem.id);
+                 if (match) {
+                    const views = parseInt(vItem.statistics.viewCount || '0', 10);
+                    finalVideos.push({
+                       video_id: vItem.id,
+                       channel_id: match.channel.id,
+                       channel_name: match.channel.title,
+                       title: vItem.snippet.title,
+                       published_at: vItem.snippet.publishedAt,
+                       views: views,
+                       subscriber_count: match.channel.subscriberCount
+                    });
+                 }
               }
            });
         }
     }
 
+    // Step 5: True Outlier Math
+    // Group by channel
+    const channelGroups: Record<string, any[]> = {};
+    finalVideos.forEach(v => {
+      if (!channelGroups[v.channel_id]) channelGroups[v.channel_id] = [];
+      channelGroups[v.channel_id].push(v);
+    });
+
+    const videosWithScores: any[] = [];
+    for (const channelId in channelGroups) {
+      const videos = channelGroups[channelId];
+      const totalViews = videos.reduce((acc, v) => acc + v.views, 0);
+      const baseline_average_views = videos.length > 0 ? Math.round(totalViews / videos.length) : 0;
+      
+      videos.forEach(v => {
+        const outlier_score = baseline_average_views > 0 ? (v.views / baseline_average_views) : 0;
+        videosWithScores.push({
+          ...v,
+          baseline_average_views,
+          outlier_score: parseFloat(outlier_score.toFixed(4))
+        });
+      });
+    }
+
     // Filter < 1000 views and Sort
-    const filteredAndSorted = finalVideos
+    const filteredAndSorted = videosWithScores
       .filter(v => v.views >= 1000)
-      .sort((a, b) => b.outlier_ratio - a.outlier_ratio);
+      .sort((a, b) => b.outlier_score - a.outlier_score);
 
     // Database Actions: Update used searches, save search log, and save results
     
@@ -227,7 +276,8 @@ app.post('/api/search-outliers', async (req, res) => {
            title: v.title,
            view_count: v.views,
            subscriber_count: v.subscriber_count,
-           outlier_ratio: v.outlier_ratio,
+           baseline_average_views: v.baseline_average_views,
+           outlier_score: v.outlier_score,
            published_at: v.published_at
         }));
         
@@ -281,7 +331,7 @@ app.get('/api/results/:searchId', async (req, res) => {
       .from('outlier_results')
       .select('*')
       .eq('search_id', req.params.searchId)
-      .order('outlier_ratio', { ascending: false });
+      .order('outlier_score', { ascending: false });
       
     if (error && error.code !== '42P01') throw new Error(error.message);
     

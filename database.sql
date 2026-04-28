@@ -31,7 +31,8 @@ CREATE TABLE outlier_results (
     channel_name TEXT NOT NULL,
     subscriber_count BIGINT DEFAULT 0,
     view_count BIGINT DEFAULT 0,
-    outlier_ratio NUMERIC, -- Views / Subs
+    baseline_average_views BIGINT DEFAULT 0,
+    outlier_score NUMERIC,
     published_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

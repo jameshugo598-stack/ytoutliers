@@ -459,10 +459,18 @@ export default function App() {
                  <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2 overflow-hidden">
                     <div className={`h-1.5 rounded-full ${profile.searches_used >= profile.search_limit ? 'bg-red-500' : 'bg-[#0F6E56]'}`} style={{ width: `${Math.min(100, (profile.searches_used / Math.max(1, profile.search_limit)) * 100)}%` }}></div>
                  </div>
-                 <div className="flex justify-between text-xs font-medium text-gray-700">
+                 <div className="flex justify-between text-xs font-medium text-gray-700 mb-3">
                     <span>{profile.searches_used} used</span>
                     <span>{profile.search_limit} total</span>
                  </div>
+                 {profile.search_limit <= 5 && (
+                    <button 
+                      onClick={() => setShowPaywall(true)}
+                      className="cursor-pointer w-full bg-black text-white text-xs font-bold uppercase tracking-wider py-2 rounded-md hover:bg-gray-800 transition-colors"
+                    >
+                      Upgrade for $5
+                    </button>
+                 )}
               </div>
            )}
         </aside>

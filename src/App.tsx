@@ -34,6 +34,7 @@ export default function App() {
   const [history, setHistory] = useState<SearchHistory[]>([]);
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profile, setProfile] = useState<{searches_used: number, search_limit: number} | null>(null);
 
   // Search State
   const [query, setQuery] = useState('');
@@ -43,6 +44,9 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<OutlierResult[]>([]);
   const [error, setError] = useState('');
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  const PAYMENT_LINK = "https://ko-fi.com/s/e5a299ba8f";
 
   useEffect(() => {
     fetch('/api/config')
@@ -103,8 +107,21 @@ export default function App() {
   useEffect(() => {
     if (supabase && session) {
       fetchHistory();
+      fetchProfile();
     }
   }, [supabase, session]);
+
+  const fetchProfile = async () => {
+    if (!supabase || !session) return;
+    const { data } = await supabase
+      .from('user_profiles')
+      .select('searches_used, search_limit')
+      .eq('id', session.user.id)
+      .single();
+    if (data) {
+      setProfile(data);
+    }
+  };
 
   const fetchHistory = async () => {
     if (!session) return;
@@ -196,6 +213,7 @@ export default function App() {
     setLoading(true);
     setError('');
     setActiveSearchId(null);
+    setShowPaywall(false);
     setResults([]);
 
     try {
@@ -217,6 +235,10 @@ export default function App() {
       const data = await res.json();
       
       if (!res.ok) {
+        if (res.status === 403 && data.error && data.error.includes("limit")) {
+          setShowPaywall(true);
+          throw new Error('Search limit reached.');
+        }
         throw new Error(data.error || 'Failed to search outliers.');
       }
       
@@ -227,6 +249,7 @@ export default function App() {
       
       setResults(data.results || []);
       fetchHistory(); // Refresh sidebar
+      fetchProfile(); // Refresh profile credits
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -324,7 +347,7 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       <header className="h-[60px] bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 shrink-0 sticky top-0 z-20">
         <div className="flex items-center gap-3">
-          <button className="md:hidden p-1 text-gray-500 hover:text-black hover:bg-gray-100 rounded-md" onClick={() => setSidebarOpen(true)}>
+          <button className="cursor-pointer md:hidden p-1 text-gray-500 hover:text-black hover:bg-gray-100 rounded-md" onClick={() => setSidebarOpen(true)}>
             <Menu size={20} />
           </button>
           <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
@@ -335,7 +358,7 @@ export default function App() {
         
         <div className="flex items-center gap-4 text-sm font-medium">
            <span className="text-gray-500 hidden sm:block">{session?.user?.email}</span>
-           <button onClick={handleLogout} className="flex items-center gap-2 text-gray-600 hover:text-black transition-colors px-3 py-1.5 rounded-md hover:bg-gray-100">
+           <button onClick={handleLogout} className="cursor-pointer flex items-center gap-2 text-gray-600 hover:text-black transition-colors px-3 py-1.5 rounded-md hover:bg-gray-100">
              <LogOut size={16} /> <span className="hidden sm:inline">Logout</span>
            </button>
         </div>
@@ -347,13 +370,60 @@ export default function App() {
            <div className="fixed inset-0 bg-black/20 z-20 md:hidden block" onClick={() => setSidebarOpen(false)} />
         )}
         
+        {/* Paywall Modal */}
+        {showPaywall && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white max-w-md w-full rounded-2xl p-8 relative shadow-2xl">
+              <button 
+                onClick={() => setShowPaywall(false)}
+                className="cursor-pointer absolute top-4 right-4 text-gray-400 hover:text-black"
+              >
+                <X size={20} />
+              </button>
+              
+              <div className="w-12 h-12 bg-[#0F6E56]/10 text-[#0F6E56] rounded-xl flex items-center justify-center mb-6">
+                <Search size={24} />
+              </div>
+              
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Unlock 60 Pro Searches</h2>
+              <p className="text-gray-600 mb-6 text-sm">
+                You've reached your free search limit. Upgrade your account to continue discovering high-performing YouTube outliers.
+              </p>
+              
+              <div className="space-y-4 mb-8">
+                <div className="flex items-center gap-3 text-sm font-medium text-gray-700">
+                  <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center">✓</div>
+                  60 Total Pro Searches
+                </div>
+                <div className="flex items-center gap-3 text-sm font-medium text-gray-700">
+                  <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center">✓</div>
+                  Advanced Subscriber Filtering
+                </div>
+                <div className="flex items-center gap-3 text-sm font-medium text-gray-700">
+                  <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center">✓</div>
+                  True Outlier Score Calculations
+                </div>
+              </div>
+              
+              <a 
+                href={`${PAYMENT_LINK}?email=${encodeURIComponent(session?.user?.email || '')}`}
+                target="_blank"
+                rel="noreferrer"
+                className="block w-full text-center bg-black text-white font-semibold py-3.5 rounded-xl hover:bg-gray-800 transition-colors shadow-md cursor-pointer"
+              >
+                Upgrade for $5
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* Sidebar */}
         <aside className={`absolute md:static w-[280px] h-full bg-white border-r border-gray-200 flex flex-col z-30 transition-transform duration-200 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
            <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50/50">
              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
                <Clock size={14} /> Search History
              </h2>
-             <button className="md:hidden text-gray-400 hover:text-black" onClick={() => setSidebarOpen(false)}>
+             <button className="cursor-pointer md:hidden text-gray-400 hover:text-black" onClick={() => setSidebarOpen(false)}>
                <X size={16} />
              </button>
            </div>
@@ -369,7 +439,7 @@ export default function App() {
                     <li key={item.id}>
                       <button 
                         onClick={() => loadPastSearch(item.id)}
-                        className={`w-full text-left px-5 py-3 hover:bg-gray-50 border-l-[3px] transition-all flex items-center justify-between group ${activeSearchId === item.id ? 'border-black bg-gray-50' : 'border-transparent'}`}
+                        className={`cursor-pointer w-full text-left px-5 py-3 hover:bg-gray-50 border-l-[3px] transition-all flex items-center justify-between group ${activeSearchId === item.id ? 'border-black bg-gray-50' : 'border-transparent'}`}
                       >
                         <div className="flex flex-col gap-0.5 overflow-hidden">
                           <span className="text-sm font-medium text-gray-900 truncate pr-2">{item.query_string}</span>
@@ -382,6 +452,19 @@ export default function App() {
                 </ul>
              )}
            </div>
+           
+           {profile && (
+              <div className="p-4 border-t border-gray-200 bg-gray-50/50">
+                 <div className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Search Credits</div>
+                 <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2 overflow-hidden">
+                    <div className={`h-1.5 rounded-full ${profile.searches_used >= profile.search_limit ? 'bg-red-500' : 'bg-[#0F6E56]'}`} style={{ width: `${Math.min(100, (profile.searches_used / Math.max(1, profile.search_limit)) * 100)}%` }}></div>
+                 </div>
+                 <div className="flex justify-between text-xs font-medium text-gray-700">
+                    <span>{profile.searches_used} used</span>
+                    <span>{profile.search_limit} total</span>
+                 </div>
+              </div>
+           )}
         </aside>
 
         {/* Main Content */}
@@ -410,7 +493,7 @@ export default function App() {
                 <button 
                   type="submit" 
                   disabled={loading || !query.trim()}
-                  className="absolute right-2 top-2 bottom-2 bg-black text-white px-6 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50"
+                  className="cursor-pointer absolute right-2 top-2 bottom-2 bg-black text-white px-6 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? 'Searching...' : 'Search'}
                 </button>
@@ -470,7 +553,7 @@ export default function App() {
                 
                 <button 
                   onClick={exportCSV}
-                  className="flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 hover:text-black transition-colors"
+                  className="cursor-pointer flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 hover:text-black transition-colors"
                 >
                   <Download size={16} /> Export to CSV
                 </button>

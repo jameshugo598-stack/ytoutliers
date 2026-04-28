@@ -34,7 +34,7 @@ app.get('/api/config', (req, res) => {
 });
 
 // Helper to get Supabase client
-function getSupabaseClient() {
+function getSupabaseClient(authHeader?: string) {
   let url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || process.env.SUPABASE_ANON_KEY?.trim();
   
@@ -46,7 +46,16 @@ function getSupabaseClient() {
   try {
     const parsedUrl = new URL(url);
     url = `${parsedUrl.protocol}//${parsedUrl.host}`;
-    return createClient(url, key);
+    
+    const options: any = {};
+    if (authHeader) {
+      options.global = {
+        headers: {
+          Authorization: authHeader
+        }
+      };
+    }
+    return createClient(url, key, options);
   } catch (error: any) {
     console.error('Invalid Supabase configuration:', error.message);
     return null;
@@ -59,7 +68,8 @@ app.post('/api/search-outliers', async (req, res) => {
     if (!query) return res.status(400).json({ error: 'Query required' });
     if (!userId) return res.status(400).json({ error: 'User ID required' });
     
-    const supabase = getSupabaseClient();
+    const authHeader = req.headers.authorization;
+    const supabase = getSupabaseClient(authHeader);
     if (!supabase) return res.status(400).json({ error: 'Supabase credentials missing.' });
     
     // 1. Check Limits in Database
@@ -70,10 +80,13 @@ app.post('/api/search-outliers', async (req, res) => {
       .single();
       
     if (profileErr && profileErr.code === 'PGRST116') {
-      // Create mock profile if it doesn't exist
+      // Get the email from the user session
+      const { data: userData } = await supabase.auth.getUser();
+      const email = userData?.user?.email || 'unknown@example.com';
+      
       const { data: newProfile, error: insertErr } = await supabase
         .from('user_profiles')
-        .insert({ id: userId, email: 'mock@example.com', search_limit: 100 })
+        .insert({ id: userId, email: email, search_limit: 3 })
         .select('searches_used, search_limit')
         .single();
       
@@ -233,7 +246,8 @@ app.post('/api/search-outliers', async (req, res) => {
 
 app.get('/api/history/:userId', async (req, res) => {
   try {
-    const supabase = getSupabaseClient();
+    const authHeader = req.headers.authorization;
+    const supabase = getSupabaseClient(authHeader);
     if (!supabase) return res.status(400).json({ error: 'Supabase credentials missing.' });
     
     const { data, error } = await supabase
@@ -251,7 +265,8 @@ app.get('/api/history/:userId', async (req, res) => {
 
 app.get('/api/results/:searchId', async (req, res) => {
   try {
-    const supabase = getSupabaseClient();
+    const authHeader = req.headers.authorization;
+    const supabase = getSupabaseClient(authHeader);
     if (!supabase) return res.status(400).json({ error: 'Supabase credentials missing.' });
     
     const { data, error } = await supabase

@@ -207,6 +207,7 @@ app.post('/api/search-outliers', async (req, res) => {
     
     // Insert search log
     let searchId = null;
+    let missingTables = false;
     const { data: searchLog, error: searchLogErr } = await supabase
       .from('user_searches')
       .insert({ user_id: userId, query_string: query })
@@ -232,11 +233,18 @@ app.post('/api/search-outliers', async (req, res) => {
         
         await supabase.from('outlier_results').insert(resultsToInsert);
       }
-    } else if (searchLogErr && searchLogErr.code !== '42P01' && !searchLogErr.message?.includes('does not exist')) {
+    } else if (searchLogErr && (searchLogErr.code === '42P01' || searchLogErr.message?.includes('does not exist'))) {
+      missingTables = true;
+      console.warn("Tables do not exist in Supabase. Please run database.sql");
+    } else if (searchLogErr) {
       console.warn("Could not log search to user_searches:", searchLogErr.message);
     }
 
-    return res.json({ success: true, results: filteredAndSorted });
+    return res.json({ 
+      success: true, 
+      results: filteredAndSorted,
+      warning: missingTables ? "Database tables are missing. Results were not saved. Please run database.sql in your Supabase SQL Editor." : undefined
+    });
 
   } catch (err: any) {
      console.error("Search Outliers Error:", err);

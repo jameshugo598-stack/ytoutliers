@@ -219,6 +219,11 @@ export default function App() {
         throw new Error(data.error || 'Failed to search outliers.');
       }
       
+      if (data.warning) {
+        console.warn(data.warning);
+        alert(data.warning);
+      }
+      
       setResults(data.results || []);
       fetchHistory(); // Refresh sidebar
     } catch (err: any) {

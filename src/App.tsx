@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Activity, Search, AlertCircle, Youtube, LogOut, Clock, Download, SlidersHorizontal, ChevronRight, Menu, X } from 'lucide-react';
 import { createClient, Session, SupabaseClient } from '@supabase/supabase-js';
 
@@ -426,15 +426,15 @@ export default function App() {
               
               <div className="space-y-4 mb-8">
                 <div className="flex items-center gap-3 text-sm font-medium text-gray-700">
-                  <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center">✓</div>
+                  <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center">âœ“</div>
                   60 Total Pro Searches
                 </div>
                 <div className="flex items-center gap-3 text-sm font-medium text-gray-700">
-                  <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center">✓</div>
+                  <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center">âœ“</div>
                   Advanced Subscriber Filtering
                 </div>
                 <div className="flex items-center gap-3 text-sm font-medium text-gray-700">
-                  <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center">✓</div>
+                  <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center">âœ“</div>
                   True Outlier Score Calculations
                 </div>
               </div>
@@ -445,7 +445,7 @@ export default function App() {
                 rel="noreferrer"
                 className="block w-full text-center bg-black text-white font-semibold py-3.5 rounded-xl hover:bg-gray-800 transition-colors shadow-md cursor-pointer"
               >
-                Upgrade for $5
+                Upgrade (Placeholder)
               </a>
             </div>
           </div>
@@ -502,7 +502,7 @@ export default function App() {
                       onClick={() => setShowPaywall(true)}
                       className="cursor-pointer w-full bg-black text-white text-xs font-bold uppercase tracking-wider py-2 rounded-md hover:bg-gray-800 transition-colors"
                     >
-                      Upgrade for $5
+                      Upgrade (Placeholder)
                     </button>
                  )}
               </div>

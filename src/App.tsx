@@ -48,7 +48,7 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [pendingSearch, setPendingSearch] = useState(false);
 
-  const PAYMENT_LINK = "https://ko-fi.com/s/e5a299ba8f";
+  const PAYMENT_LINK = "https://example.com/payment";
 
   useEffect(() => {
     if (session && pendingSearch) {

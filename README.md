@@ -1,20 +1,33 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# YT Outlier
 
-# Run and deploy your AI Studio app
+YT Outlier is a tool for discovering outlier videos on YouTube. It allows you to search for specific topics and identify videos that significantly overperform or underperform on their respective channels.
 
-This contains everything you need to run your app locally.
+## Try the Cloud Version
 
-View your app in AI Studio: https://ai.studio/apps/54979651-a23d-4037-9b16-63500531ad6c
+Try out the cloud version here: https://ytoutlier.vercel.app/
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
+**Prerequisites:** Node.js (v18 or higher)
 
+1. Clone the repository and navigate into the directory.
+2. Install dependencies and run the server:
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm install
+npm run dev
+```
+
+3. Set your environment variables in `.env` (use `.env.example` as a reference). You will need a YouTube API key and Supabase credentials if using authentication or database features.
+
+## Technologies Used
+
+* React
+* Vite
+* Tailwind CSS
+* TypeScript
+* Supabase
+
+## Contributing
+
+Contributions are welcome. Feel free to open an issue or submit a pull request if you want to improve the project.
